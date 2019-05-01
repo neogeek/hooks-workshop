@@ -1,41 +1,80 @@
-import React, { useState, useEffect } from "react"
+import React, { useState, useEffect, useReducer } from "react"
 import FeedPost from "app/FeedPost"
 import { loadFeedPosts, subscribeToNewFeedPosts } from "app/utils"
 // import FeedFinal from './Feed.final'
 // export default FeedFinal
 export default Feed
 
+let feedCache
+
 function Feed() {
-  const [posts, setPosts] = useState([])
-  const [newestPosts, setNewestPosts] = useState([])
-  const [time, setTime] = useState(Date.now())
-  const [postLimit, setPostLimit] = useState(3)
+  const [state, dispatch] = useReducer(
+    (state, action) => {
+      switch (action.type) {
+        case "LOAD_POSTS":
+          return {
+            ...state,
+            posts: action.posts
+          }
+        case "LOAD_NEW_POSTS":
+          return {
+            ...state,
+            newPosts: action.newPosts
+          }
+        case "VIEW_NEW":
+          return {
+            ...state,
+            time: Date.now(),
+            limit: state.limit + state.newPosts.length
+          }
+        case "VIEW_MORE":
+          return {
+            ...state,
+            limit: state.limit + 3
+          }
+        default:
+          return state
+      }
+    },
+    feedCache || {
+      posts: [],
+      newPosts: [],
+      time: Date.now(),
+      limit: 3
+    }
+  )
+
+  const { time, limit, newPosts, posts } = state
 
   useEffect(() => {
-    return subscribeToNewFeedPosts(time, newestPosts =>
-      setNewestPosts(newestPosts)
+    return subscribeToNewFeedPosts(time, newPosts =>
+      dispatch({ type: "LOAD_NEW_POSTS", newPosts })
     )
   }, [time])
 
   useEffect(() => {
+    feedCache = state
+  })
+
+  useEffect(() => {
     let canceled = false
-    loadFeedPosts(time, postLimit).then(posts => !canceled && setPosts(posts))
+    loadFeedPosts(time, limit).then(
+      posts => !canceled && dispatch({ type: "LOAD_POSTS", posts })
+    )
     return () => (canceled = true)
-  }, [time, postLimit])
+  }, [time, limit])
 
   return (
     <div className="Feed">
-      {newestPosts.length ? (
+      {newPosts.length ? (
         <div className="Feed_button_wrapper">
           <button
             className="Feed_new_posts_button icon_button"
             onClick={() => {
-              setTime(Date.now())
-              setPostLimit(postLimit + newestPosts.length)
-              setNewestPosts([])
+              dispatch({ type: "VIEW_NEW" })
             }}
           >
-            View {newestPosts.length} New Post(s)
+            View {newPosts.length} New Post(s)
           </button>
         </div>
       ) : null}
@@ -49,7 +88,7 @@ function Feed() {
       <div className="Feed_button_wrapper">
         <button
           className="Feed_new_posts_button icon_button"
-          onClick={() => setPostLimit(postLimit + 3)}
+          onClick={() => dispatch({ type: "VIEW_MORE" })}
         >
           View More
         </button>
